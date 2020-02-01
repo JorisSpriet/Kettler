@@ -1,0 +1,264 @@
+<?xml version="1.0" encoding="UTF-8"?>
+
+<project name="JErgometer" default="runJErgometer" basedir=".">
+	<!-- Overwrite default variables in this file -->
+	<property file="build.properties" />
+
+	<!-- Update if needed. -->
+	<property name="program.version"    value="0.8"/>
+
+	<!-- Main class. -->
+	<property name="main.class"         value="org.jergometer.Jergometer"/>
+
+	<!-- File names. -->
+	<property name="start.sh"           value="jergometer"/>
+	<property name="start.bat"          value="jergometer.bat"/>
+	<property name="program.jar"        value="jergometer.jar"/>
+
+	<!-- Locations -->
+	<property name="src"                location="src"/>
+	<property name="src-test"           location="test/src"/>
+	<property name="build"              location="build"/>
+	<property name="lib"                value="lib"/>
+	<property name="dist"               location="dist"/>
+	<property name="upload"             location="${dist}/${ant.project.name}"/>
+	<property name="uploadPrepare"      location="${dist}/${ant.project.name}_prepare"/>
+	<property name="linuxSrcPkg"        location="${dist}/jergometer"/>
+	<property name="releases"           location="${dist}/releases"/>
+
+	<property name="buildClasses"       location="${build}/classes"/>
+	<property name="buildClasses-test"  location="${build}/classes-test"/>
+	<property name="programJar"         location="${uploadPrepare}/${program.jar}"/>
+	<property name="velocityJar"        value="${lib}/velocity-1.7-dep.jar"/>
+	<property name="rxtxJar"            value="${lib}/RXTXcomm.jar"/>
+	<property name="rxtxSoDir"          location="."/>
+
+	<path id="libraries">
+		<fileset dir="${lib}">
+			<include name="*.jar"/>
+		</fileset>
+		<filelist>
+			<file name="${velocityJar}"/>
+			<file name="${rxtxJar}"/>
+		</filelist>
+	</path>
+	
+	<path id="libraries-test">
+	  <fileset dir="test/lib">
+	    <include name="*.jar"/>
+	  </fileset>
+	</path>
+
+	<target name="osInfo">
+		<echo message="os.name: ${os.name}"/>
+		<echo message="os.arch: ${os.arch}"/>
+		<echo message="os.version: ${os.version}"/>
+	</target> 
+	
+	<!-- Run application. -->
+	<target name="runJErgometer" depends="osInfo,compile">
+		<java classname="${main.class}" fork="true">
+			<classpath>
+				<pathelement location="${buildClasses}" /> 
+				<path refid="libraries"/>
+			</classpath>
+			<jvmarg value="-Djava.library.path=${lib}/dlls/${os.name}/${os.arch}" />
+<!--			<jvmarg value="-Djava.util.logging.config.file=conf/logging.properties" />-->
+			<arg value="--bleeding-edge"/>
+		</java>
+	</target>
+	
+	<!-- Delete class and jar files. -->
+	<target name="clean">
+		<delete dir="${buildClasses}"/>
+		<delete file="${programJar}"/>
+		<delete dir="${build}"/>
+	</target>
+	
+	<!-- Compile application. -->
+	<target name="compile">
+		<mkdir dir="${buildClasses}"/>
+		
+		<!-- Compile the project. -->
+		<javac srcdir="${src}" destdir="${buildClasses}" target="1.5" source="1.5" encoding="UTF-8" debug="on">
+			<classpath>
+				<pathelement location="${buildClasses}" />
+				<path refid="libraries"/>
+			</classpath>
+		</javac>
+		
+		<!-- Copy all non-java files to classes. -->
+		<copy todir="${buildClasses}">
+			<fileset dir="src">
+				<exclude name="**/*.java"/>
+			</fileset>
+		</copy>
+	</target>
+
+	<!-- Compile application. -->
+	<target name="compile-test" depends="compile">
+	  <mkdir dir="${buildClasses-test}"/>
+
+	  <!-- Compile the project. -->
+	  <javac srcdir="${src-test}" destdir="${buildClasses-test}" target="1.5" source="1.5" encoding="UTF-8" debug="on">
+	    <classpath>
+	      <pathelement location="${buildClasses}"/>
+	      <pathelement location="${buildClasses-test}"/>
+		    <path refid="libraries"/>
+		    <path refid="libraries-test"/>
+	    </classpath>
+	  </javac>
+	</target>
+
+	<!-- Run tests. -->
+	<target name="test" depends="compile-test">
+    <junit>
+	    <classpath>
+		    <pathelement location="${buildClasses}"/>
+		    <pathelement location="${buildClasses-test}"/>
+			  <path refid="libraries"/>
+			  <path refid="libraries-test"/>
+			</classpath>
+
+      <formatter type="brief" usefile="false" />
+      <batchtest>
+        <fileset dir="${buildClasses-test}" includes="**/*Test.class" />
+      </batchtest>
+    </junit>
+  </target>
+
+	<!-- Builds the upload directory including the jar file. -->
+	<target name="jar" depends="compile,updateBuildNumber">
+		<delete dir="${uploadPrepare}"/>
+		<mkdir dir="${uploadPrepare}"/>
+
+		<!-- Build jar file. -->
+		<jar jarfile="${programJar}" basedir="${buildClasses}">
+			<manifest>
+				<attribute name="Main-Class" value="${main.class}"/>
+			</manifest>
+		</jar>
+
+		<!-- Copy example programs and dlls. -->
+		<copy todir="${uploadPrepare}/programs">
+			<fileset dir="programs"/>
+		</copy>
+		<mkdir dir="${uploadPrepare}/lib"/>
+		<copy todir="${uploadPrepare}/lib">
+			<fileset dir="${lib}">
+				<include name="*.jar"/>
+				<exclude name="annotations.jar"/>
+			</fileset>
+		</copy>
+		<copy todir="${uploadPrepare}/lib/dlls">
+			<fileset dir="${lib}/dlls"/>
+		</copy>
+
+		<!-- Copy start scripts. -->
+		<copy todir="${uploadPrepare}" file="scripts/${start.sh}"/>
+		<copy todir="${uploadPrepare}" file="scripts/${start.bat}"/>
+		<copy todir="${uploadPrepare}/start">
+			<fileset dir="scripts/start"/>
+		</copy>
+		<chmod file="${uploadPrepare}/${start.sh}" perm="ugo+x"/>
+		<chmod file="${uploadPrepare}/start/unix_start.sh" perm="ugo+x"/>
+	</target>
+
+	<!-- Build a new release version. -->
+	<target name="create_release" depends="jar,create_linux_source_package">
+		<mkdir dir="${releases}"/>
+
+		<exec executable="scripts/create_release">
+			<arg value="${program.version}.${build.number}"/>
+		</exec>
+	</target>
+
+	<!-- Increments the build number. -->
+	<target name="updateBuildNumber">
+		<exec executable="scripts/check_version">
+			<arg value="${program.version}"/>
+		</exec>
+
+	  <buildnumber/>
+
+		<echo message="${program.version}.${build.number}" file="${buildClasses}/version.txt"/>
+	</target>
+
+	<!-- Validates the source code and creates a new release on the remote server. -->
+	<target name="create_remote_release" depends="compile">
+		<exec executable="scripts/create_remote_release">
+			<arg value="${ant.project.name}-${program.version}.${build.number}"/>
+		</exec>
+	</target>
+
+	<!-- Build the Linux source package. -->
+	<target name="create_linux_source_package" depends="jar">
+		<delete dir="${linuxSrcPkg}-${program.version}.${build.number}"/>
+		<mkdir dir="${linuxSrcPkg}-${program.version}.${build.number}"/>
+		<copy todir="${linuxSrcPkg}-${program.version}.${build.number}">
+			<fileset dir=".">
+				<include name="lib/annotations.jar"/>
+				<include name="lib/velocity-1.7-dep.jar"/>
+				<include name="programs/**"/>
+				<include name="scripts/create_linux_source_package"/>
+				<include name="src/**"/>
+				<include name="build.xml"/>
+				<include name="CHANGELOG"/>
+				<include name="COPYING"/>
+			</fileset>
+			<fileset dir="packaging/linux">
+				<include name="**"/>
+			</fileset>
+		</copy>
+		<copy todir="${linuxSrcPkg}-${program.version}.${build.number}/src">
+			<fileset dir="${buildClasses}">
+				<include name="version.txt"/>
+			</fileset>
+		</copy>
+		<chmod file="${linuxSrcPkg}-${program.version}.${build.number}/configure" perm="ugo+x"/>
+		<chmod file="${linuxSrcPkg}-${program.version}.${build.number}/scripts/*" perm="ugo+x"/>
+
+		<exec executable="scripts/create_linux_source_package" dir=".">
+			<arg value="${program.version}.${build.number}"/>
+		</exec>
+	</target>
+
+	<!-- Build the Linux package. -->
+	<target name="create_linux_package" depends="linux_jar">
+	</target>
+
+	<!-- Builds the upload directory including the jar file. -->
+	<target name="linux_jar" depends="compile">
+		<delete dir="${uploadPrepare}"/>
+		<mkdir dir="${uploadPrepare}"/>
+
+		<!-- Build jar file. -->
+		<echo message="false" file="${buildClasses}/updatable"/>
+		<jar jarfile="${programJar}" basedir="${buildClasses}">
+			<manifest>
+				<attribute name="Main-Class" value="${main.class}"/>
+				<attribute name="Class-Path" value="${velocityJar}"/>
+				<attribute name="Class-Path" value="${rxtxJar}"/>
+			</manifest>
+		</jar>
+
+		<!-- Copy example programs and dlls. -->
+		<copy todir="${uploadPrepare}/programs">
+			<fileset dir="programs"/>
+		</copy>
+
+		<!-- Copy start scripts. -->
+		<copy todir="${uploadPrepare}" file="scripts/${start.sh}">
+			<filterset>
+			  <filter token="velocityJar" value="${velocityJar}"/>
+			  <filter token="rxtxJar" value="${rxtxJar}"/>
+			  <filter token="rxtxSoDir" value="${rxtxSoDir}"/>
+			</filterset>
+		</copy>
+		<copy todir="${uploadPrepare}/start">
+			<fileset dir="scripts/start"/>
+		</copy>
+		<chmod file="${uploadPrepare}/${start.sh}" perm="ugo+x"/>
+		<chmod file="${uploadPrepare}/start/unix_start.sh" perm="ugo+x"/>
+	</target>
+</project>

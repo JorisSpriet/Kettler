@@ -1,0 +1,29 @@
+VE
+Request Version
+205 probably means firmware version
+
+ID
+Request ID
+BO2P   probably means boston xl ??
+
+RS
+Request Reset
+ACK (character or string ?)
+
+CM
+Request Command Mode
+
+CA
+Request CA
+103
+
+ST
+Request Status
+-- 000    012    0023    02    0094    02:03    000    01
+-- pulse  spd*10 km*100  incl. energy  time     spd    incl.
+--        setp.          setp.                 current current
+
+PS speed
+Request speed (in spd * 0 setpt)
+
+

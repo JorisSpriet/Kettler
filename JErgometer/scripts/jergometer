@@ -1,0 +1,13 @@
+#!/bin/bash
+
+DIR=`dirname $0`
+cd $DIR
+
+# start the application loop
+action=start
+while [ "$action" = "start" ]; do
+	start/unix_start.sh
+	if [ "$?" != "255" ]; then
+		action=end
+	fi
+done
